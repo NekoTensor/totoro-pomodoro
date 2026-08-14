@@ -47,7 +47,7 @@ function inertBridge(): TotoroApi {
     },
     appendLog: async (): Promise<LogResult> => {
       warn();
-      return { ok: false, code: 'UNKNOWN', message: 'Bridge unavailable' };
+      return { ok: false, code: 'BRIDGE_UNAVAILABLE', message: 'Preload bridge unavailable' };
     },
     saveSession: async (_session: ActiveSession | null) => {
       warn();
@@ -74,6 +74,34 @@ function inertBridge(): TotoroApi {
   };
 }
 
-const injected = typeof window !== 'undefined' ? window.totoro : undefined;
+const fallback = inertBridge();
 
-export const bridge: TotoroApi = injected ?? inertBridge();
+/**
+ * Resolved on every call rather than captured once at module load. Capturing
+ * it up front bakes in whatever `window.totoro` happened to be at import time,
+ * so any ordering hiccup would permanently pin the app to the inert stub and
+ * silently break saving for the rest of the session.
+ */
+function api(): TotoroApi {
+  if (typeof window === 'undefined') return fallback;
+  return window.totoro ?? fallback;
+}
+
+export const bridge: TotoroApi = {
+  getInitialState: () => api().getInitialState(),
+  chooseLogDestination: () => api().chooseLogDestination(),
+  getLogDestination: () => api().getLogDestination(),
+  openLogFile: () => api().openLogFile(),
+  appendLog: (payload) => api().appendLog(payload),
+  saveSession: (session) => api().saveSession(session),
+  savePendingPrompt: (prompt) => api().savePendingPrompt(prompt),
+  shakeWindow: () => api().shakeWindow(),
+  focusWindow: () => api().focusWindow(),
+  quit: () => api().quit(),
+  onResumeFromSleep: (callback) => api().onResumeFromSleep(callback),
+};
+
+/** True when the real preload bridge is present. */
+export function bridgeAvailable(): boolean {
+  return typeof window !== 'undefined' && window.totoro != null;
+}

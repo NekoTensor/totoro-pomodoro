@@ -79,6 +79,8 @@ export type LogErrorCode =
   | 'NOT_A_DIRECTORY'
   | 'DISK_FULL'
   | 'INVALID_PAYLOAD'
+  /** The preload never reached the renderer, so nothing could be written. */
+  | 'BRIDGE_UNAVAILABLE'
   | 'UNKNOWN';
 
 export type LogResult =

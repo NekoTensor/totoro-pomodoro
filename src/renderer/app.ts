@@ -2,12 +2,30 @@
 // preload bridge. All side effects live here; machine.ts stays pure.
 
 import { buildTotoroMarkup } from './components/totoro.js';
-import { onFrame, prefersReducedMotion } from './services/anim.js';
+import { onFrame, onTick, prefersReducedMotion } from './services/anim.js';
 import { AlarmAudio } from './services/audio.js';
 import { bridge } from './services/ipcClient.js';
 import { formatMMSS, remainingMs, wedgeSteps } from './services/timer.js';
 import { hydrate, initialState, reduce, type Event, type MachineState, type Phase } from './state/machine.js';
-import { WEDGE_STEPS, type LogEntryPayload } from '../shared/types.js';
+import { DEFAULT_MINUTES, WEDGE_STEPS, type LogEntryPayload } from '../shared/types.js';
+import { clampMinutes, sanitizeTask } from '../shared/validate.js';
+
+/** Spelled out rather than shown as caret notation, which reads as noise. */
+const ABANDON_HINT = navigator.userAgent.includes('Mac')
+  ? '&#8984;C = ABANDON'
+  : 'CTRL+C = ABANDON';
+
+/** Human-readable reasons for a failed write, so the belly can say why. */
+const LOG_ERROR_TEXT: Record<string, string> = {
+  PERMISSION_DENIED: 'NO PERMISSION',
+  PATH_NOT_FOUND: 'PATH MISSING',
+  NOT_A_DIRECTORY: 'BAD PATH',
+  DISK_FULL: 'DISK FULL',
+  INVALID_PAYLOAD: 'BAD DATA',
+  IPC: 'APP ERROR',
+  BRIDGE_UNAVAILABLE: 'NO CONNECTION',
+  UNKNOWN: 'WRITE FAILED',
+};
 
 const FLASH_MS = 220;
 const REDUCED_FLASH_MS = 1000;
@@ -32,6 +50,7 @@ export class App {
   private readonly audio = new AlarmAudio();
   private phaseDisposers: Disposer[] = [];
   private frameDisposer: Disposer | null = null;
+  private tickDisposer: Disposer | null = null;
   /** False until the first transition, so the initial phase runs its effects. */
   private entered = false;
   /** True when SETUP was reached from a finished session rather than a launch. */
@@ -64,8 +83,11 @@ export class App {
       ? hydrate(initial.session, initial.pendingPrompt, Date.now())
       : initialState();
 
+    // Two loops with different jobs: the tick drives the state machine and
+    // keeps running while hidden; the frame loop only animates.
+    this.tickDisposer = onTick((now) => this.onTick(now));
     this.frameDisposer = onFrame((now) => this.onFrame(now));
-    bridge.onResumeFromSleep(() => this.dispatch({ type: 'TICK', now: Date.now() }));
+    bridge.onResumeFromSleep(() => this.onTick(Date.now()));
 
     this.transition(next, 'SETUP');
   }
@@ -152,12 +174,16 @@ export class App {
 
   // ------------------------------------------------------------------ frames
 
-  private onFrame(now: number): void {
+  /** Authoritative clock: advances the machine, and repaints the numbers. */
+  private onTick(now: number): void {
     if (this.state.phase === 'TIMER') this.dispatch({ type: 'TICK', now });
-
-    this.animateIdle(now);
     this.paintDial(now);
     this.paintReadout(now);
+  }
+
+  /** Animation only — safe to stop whenever the window is hidden. */
+  private onFrame(now: number): void {
+    this.animateIdle(now);
   }
 
   private animateIdle(now: number): void {
@@ -296,7 +322,7 @@ export class App {
     this.belly.innerHTML = `
       <div id="readout" class="centered readout" style="top:205px">${escapeHtml(this.lastReadout || '00:00')}</div>
       ${task ? `<div class="centered label" style="top:278px">${escapeHtml(task.toUpperCase())}</div>` : ''}
-      ${this.state.phase === 'TIMER' ? '<div class="centered hint" style="top:294px">^C ABANDON</div>' : ''}`;
+      ${this.state.phase === 'TIMER' ? `<div class="centered hint" style="top:294px">${ABANDON_HINT}</div>` : ''}`;
   }
 
   private renderLogPrompt(): void {
@@ -310,8 +336,9 @@ export class App {
       this.belly.innerHTML = `
         <div class="centered label label-inverse" style="top:186px">${prompt.outcome.toUpperCase()}</div>
         <div class="centered readout" style="top:200px">${formatMMSS(prompt.elapsedMs)}</div>
-        <div class="error-plate" style="top:244px;left:62px;width:156px;text-align:center">
-          <div class="label">LOG FAILED &#183; SAVED</div>
+        <div class="error-plate" style="top:240px;left:58px;width:164px;text-align:center">
+          <div class="label">${LOG_ERROR_TEXT[this.state.logError] ?? 'WRITE FAILED'}</div>
+          <div class="label" style="margin-top:2px">SAVED &#183; WILL RETRY</div>
           <div style="display:flex;gap:4px;justify-content:center;margin-top:4px">
             <button id="btn-retry" class="pixel-button" style="width:40px">RETRY</button>
             <button id="btn-path" class="pixel-button" style="width:40px">PATH</button>
@@ -345,20 +372,27 @@ export class App {
     const prompt = this.state.prompt;
     if (!prompt) return;
 
+    // Every field is coerced into the range the main process validates, so a
+    // starved tick or an odd duration can never turn a real session into a
+    // rejected payload.
     const payload: LogEntryPayload = {
       outcome: prompt.outcome,
-      plannedMinutes: Math.round(prompt.plannedDurationMs / 60_000),
-      elapsedMs: prompt.elapsedMs,
-      task: prompt.task,
-      endedAt: prompt.endedAt,
+      plannedMinutes: clampMinutes(Math.round(prompt.plannedDurationMs / 60_000), DEFAULT_MINUTES),
+      elapsedMs: Math.max(0, Math.min(Math.round(prompt.elapsedMs), prompt.plannedDurationMs)),
+      task: sanitizeTask(prompt.task),
+      endedAt: Math.max(0, Math.round(prompt.endedAt)),
     };
 
     try {
       const result = await bridge.appendLog(payload);
-      if (result.ok) this.dispatch({ type: 'RESOLVE' });
-      else this.dispatch({ type: 'LOG_FAILED', message: result.code });
+      if (result.ok) {
+        this.dispatch({ type: 'RESOLVE' });
+      } else {
+        console.error('[app] log rejected', result.code, result.message, payload);
+        this.dispatch({ type: 'LOG_FAILED', message: result.code });
+      }
     } catch (error) {
-      console.error('[app] log IPC failed', error);
+      console.error('[app] log IPC failed', error, payload);
       this.dispatch({ type: 'LOG_FAILED', message: 'IPC' });
     }
   }
@@ -421,6 +455,7 @@ export class App {
   destroy(): void {
     this.disposePhase();
     this.frameDisposer?.();
+    this.tickDisposer?.();
   }
 }
 

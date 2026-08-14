@@ -96,9 +96,15 @@ export function registerIpc(): void {
 
   ipcMain.handle(IPC.appendLog, (_event, payload: unknown): LogResult => {
     if (!isLogEntryPayload(payload)) {
+      // Logged loudly: a rejection here happens before anything is spooled, so
+      // without this the failure leaves no trace on disk at all.
+      console.error('[ipc] rejected malformed log payload', JSON.stringify(payload));
       return { ok: false, code: 'INVALID_PAYLOAD', message: 'Rejected malformed log payload.' };
     }
-    return appendLog(payload);
+
+    const result = appendLog(payload);
+    if (!result.ok) console.error('[ipc] log write failed', result.code, result.message);
+    return result;
   });
 
   ipcMain.handle(IPC.saveSession, (_event, session: unknown): boolean => {

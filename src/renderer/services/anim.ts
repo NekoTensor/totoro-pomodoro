@@ -58,3 +58,27 @@ export function onFrame(subscriber: Subscriber): () => void {
 export function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
+
+/** How often the authoritative clock re-evaluates the session. */
+const TICK_MS = 250;
+
+/**
+ * The authoritative tick, deliberately separate from the animation loop.
+ *
+ * requestAnimationFrame stops when the window is hidden or occluded, so it
+ * must never be the only thing driving the state machine — a hidden session
+ * would simply stop advancing and sail past its own end. setInterval keeps
+ * running (the window is created with backgroundThrottling disabled), so the
+ * alarm still fires while Totoro is behind another window.
+ */
+export function onTick(subscriber: (now: number) => void): () => void {
+  const handle = setInterval(() => {
+    try {
+      subscriber(Date.now());
+    } catch (error) {
+      console.error('[anim] tick subscriber failed', error);
+    }
+  }, TICK_MS);
+
+  return () => clearInterval(handle);
+}

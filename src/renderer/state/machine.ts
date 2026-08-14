@@ -132,11 +132,16 @@ export function reduce(state: MachineState, event: Event): MachineState {
     case 'CANCEL': {
       if (state.phase !== 'TIMER' || !state.session) return state;
       const session = state.session;
+      // Clamped to the planned duration: if the tick was starved (hidden
+      // window, frozen renderer) the raw figure can exceed what was planned,
+      // and an elapsed time longer than the session is both meaningless and
+      // outside the range the log payload validator accepts.
+      const elapsed = Math.min(elapsedMs(session, event.now), session.plannedDurationMs);
       return {
         ...state,
         phase: 'LOG_PROMPT',
         session: null,
-        prompt: promptFrom(session, 'abandoned', event.now, elapsedMs(session, event.now)),
+        prompt: promptFrom(session, 'abandoned', event.now, elapsed),
       };
     }
 

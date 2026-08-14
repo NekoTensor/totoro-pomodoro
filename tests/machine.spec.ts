@@ -86,6 +86,16 @@ describe('TIMER', () => {
     expect(state.prompt?.elapsedMs).toBe(8 * 60_000 + 37_000);
   });
 
+  it('clamps abandoned elapsed to the planned duration when the tick was starved', () => {
+    // Regression: with the window hidden the tick could stop, letting a
+    // session sit in TIMER for hours. Ctrl+C then produced an elapsed time
+    // beyond the log validator's ceiling, and the entry was rejected.
+    const state = reduce(started(25), { type: 'CANCEL', now: NOW + 5 * 60 * 60_000 });
+
+    expect(state.prompt?.outcome).toBe('abandoned');
+    expect(state.prompt?.elapsedMs).toBe(25 * 60_000);
+  });
+
   it('cannot start a second session while one runs', () => {
     const state = started();
     expect(reduce(state, { type: 'START', now: NOW + 1000, id: 'other' })).toBe(state);

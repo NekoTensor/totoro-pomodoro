@@ -97,6 +97,14 @@ describe('IPC payload guards', () => {
     expect(isLogEntryPayload([])).toBe(false);
   });
 
+  it('rejects an elapsed time beyond the longest allowed session', () => {
+    // This rejection happens before anything is spooled, so it used to fail
+    // with no trace on disk at all.
+    const base = { outcome: 'abandoned', plannedMinutes: 25, task: '', endedAt: NOW };
+    expect(isLogEntryPayload({ ...base, elapsedMs: 180 * 60_000 })).toBe(true);
+    expect(isLogEntryPayload({ ...base, elapsedMs: 180 * 60_000 + 1 })).toBe(false);
+  });
+
   it('validates sessions and prompts', () => {
     expect(isActiveSession(validSession())).toBe(true);
     expect(isActiveSession({ ...validSession(), status: 'paused' })).toBe(false);
