@@ -5,3 +5,6 @@ shots/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local editor/agent config
+.claude/
