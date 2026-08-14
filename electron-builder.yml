@@ -1,0 +1,50 @@
+appId: com.amey.totoro-pomodoro
+productName: Totoro Pomodoro
+copyright: Copyright © 2026 Amey
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**
+  - package.json
+
+# The tray icon is read from disk at runtime, so it must survive asar packing.
+extraResources:
+  - from: build/tray.png
+    to: build/tray.png
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.png
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Totoro Pomodoro
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  icon: build/icon.png
+  category: public.app-category.productivity
+  extendInfo:
+    # Accessory app: no Dock icon, no Cmd-Tab entry. The tray is its presence.
+    LSUIElement: true
+
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: build/icon.png
+  category: Utility
+  synopsis: A pixel-art Totoro who keeps your Pomodoro time in his belly

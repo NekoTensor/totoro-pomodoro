@@ -1,0 +1,307 @@
+/* Pixel-art UI. No gradients, no blur, no rounded corners, no smooth easing. */
+
+/* Must stay in step with src/renderer/components/palette.ts. */
+:root {
+  --body: #7c7c64;
+  --body-shadow: #62624e;
+  --outline: #2e2e26;
+  --dark: #1c1c18;
+  --belly: #ebebb4;
+  --belly-shadow: #d8d89a;
+  --green: #8b9a68;
+  --green-bright: #b4c38a;
+  --mono: Menlo, Monaco, 'Courier New', monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 280px;
+  height: 340px;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  cursor: default;
+}
+
+#stage {
+  position: relative;
+  width: 280px;
+  height: 340px;
+}
+
+/* The character itself is the window's drag handle. */
+#character {
+  position: absolute;
+  inset: 0;
+  -webkit-app-region: drag;
+}
+
+#character svg {
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* Belly content sits on top of the SVG at matching 1:1 coordinates. */
+#belly {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--outline);
+}
+
+#belly > * {
+  position: absolute;
+  -webkit-app-region: no-drag;
+}
+
+.centered {
+  left: 0;
+  width: 280px;
+  text-align: center;
+}
+
+/* ---------- shared pixel text ---------- */
+
+.label {
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* For text sitting on the dark dial rather than on the cream belly. */
+.label-inverse {
+  color: var(--belly);
+  text-shadow: 1px 1px 0 var(--dark);
+}
+
+.hint {
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  color: var(--outline);
+  opacity: 0.75;
+}
+
+.readout {
+  font-size: 26px;
+  line-height: 26px;
+  color: var(--belly);
+  text-shadow: 1px 1px 0 var(--dark);
+}
+
+/* ---------- SETUP ---------- */
+
+#minutes-input {
+  width: 74px;
+  left: 103px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 34px;
+  text-align: center;
+  color: var(--belly);
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  text-shadow: 1px 1px 0 var(--dark);
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+#minutes-input::-webkit-outer-spin-button,
+#minutes-input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+/* The duration is auto-selected on entering SETUP; the default blue highlight
+   would be the only non-palette colour on screen. */
+#minutes-input::selection {
+  background: var(--green);
+  color: var(--outline);
+}
+
+#task-input::selection {
+  background: var(--green);
+  color: var(--outline);
+}
+
+#task-input {
+  width: 108px;
+  left: 86px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 8px;
+  letter-spacing: 0;
+  text-align: center;
+  color: var(--outline);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--belly-shadow);
+  outline: none;
+  padding: 0 0 2px;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+#task-input::placeholder {
+  color: var(--belly-shadow);
+}
+
+#task-input:focus {
+  border-bottom-color: var(--outline);
+}
+
+/* Out-of-range durations clamp, and jitter two frames to show they changed. */
+.jitter {
+  animation: jitter 0.16s steps(1, end) 2;
+}
+
+@keyframes jitter {
+  0% {
+    transform: translateX(-1px);
+  }
+  50% {
+    transform: translateX(1px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* ---------- buttons ---------- */
+
+.pixel-button {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--outline);
+  background: var(--belly);
+  border: 2px solid var(--outline);
+  border-radius: 0;
+  padding: 0;
+  height: 18px;
+  box-shadow: 2px 2px 0 var(--outline);
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+.pixel-button:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--outline);
+}
+
+.pixel-button:focus-visible {
+  outline: 2px solid var(--dark);
+  outline-offset: 1px;
+}
+
+/* ---------- error state: the belly inverts, no new palette colour ---------- */
+
+.error-plate {
+  background: var(--outline);
+  color: var(--belly);
+  padding: 3px 4px;
+}
+
+.error-plate .pixel-button {
+  background: var(--belly);
+  color: var(--outline);
+}
+
+/* ---------- dial ---------- */
+
+.wedge-step {
+  fill: transparent;
+}
+
+.wedge-step.on {
+  fill: var(--green);
+}
+
+/* Alarm flash: the lit wedge and the interior swap to the highlight green. */
+#dial.flash .wedge-step.on {
+  fill: var(--green-bright);
+}
+
+#dial.flash #dial-interior {
+  fill: var(--green);
+}
+
+/* ---------- blinking ---------- */
+
+.eyelid {
+  display: none;
+}
+
+.eyelid.blink {
+  display: block;
+}
+
+/* ---------- hover glyphs ---------- */
+
+#glyphs {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s steps(2, end);
+  -webkit-app-region: no-drag;
+}
+
+#stage:hover #glyphs,
+#glyphs:focus-within {
+  opacity: 1;
+}
+
+#glyphs.hidden {
+  display: none;
+}
+
+#glyphs button {
+  width: 14px;
+  height: 14px;
+  font-size: 10px;
+  line-height: 1;
+  font-family: var(--mono);
+  color: var(--belly);
+  background: var(--outline);
+  border: 1px solid var(--dark);
+  border-radius: 0;
+  cursor: pointer;
+  padding: 0;
+}
+
+#glyphs button:hover {
+  background: var(--body-shadow);
+}
+
+#glyphs button:focus-visible {
+  outline: 2px solid var(--belly);
+  outline-offset: 1px;
+}
+
+/* ---------- reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .jitter {
+    animation: none;
+  }
+  #glyphs {
+    transition: none;
+  }
+}

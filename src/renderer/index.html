@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';"
+    />
+    <title>Totoro Pomodoro</title>
+    <link rel="stylesheet" href="./styles/pixel.css" />
+  </head>
+  <body>
+    <div id="stage">
+      <div id="character"></div>
+      <div id="belly"></div>
+      <div id="glyphs">
+        <button id="glyph-settings" type="button" title="Change log destination" aria-label="Change log destination">&#9881;</button>
+        <button id="glyph-close" type="button" title="Quit" aria-label="Quit">&#215;</button>
+      </div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
