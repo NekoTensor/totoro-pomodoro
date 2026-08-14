@@ -82,9 +82,24 @@ const fallback = inertBridge();
  * so any ordering hiccup would permanently pin the app to the inert stub and
  * silently break saving for the rest of the session.
  */
+/**
+ * A bare truthiness check is not enough. HTML named access exposes every
+ * element id on `window`, so a stray `id="totoro"` in the DOM would resolve to
+ * a DOM node here and every call would fail with "not a function" instead of
+ * degrading to the stub. Confirm it actually quacks like the API.
+ */
+function isBridge(value: unknown): value is TotoroApi {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as TotoroApi).getInitialState === 'function' &&
+    typeof (value as TotoroApi).appendLog === 'function'
+  );
+}
+
 function api(): TotoroApi {
   if (typeof window === 'undefined') return fallback;
-  return window.totoro ?? fallback;
+  return isBridge(window.totoro) ? window.totoro : fallback;
 }
 
 export const bridge: TotoroApi = {
@@ -101,7 +116,7 @@ export const bridge: TotoroApi = {
   onResumeFromSleep: (callback) => api().onResumeFromSleep(callback),
 };
 
-/** True when the real preload bridge is present. */
+/** True when the real preload bridge is present and usable. */
 export function bridgeAvailable(): boolean {
-  return typeof window !== 'undefined' && window.totoro != null;
+  return typeof window !== 'undefined' && isBridge(window.totoro);
 }

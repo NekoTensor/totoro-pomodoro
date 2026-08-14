@@ -158,9 +158,12 @@ function feet(): string {
  * translates, so the whole creature moves as one piece.
  */
 export function buildTotoroMarkup(): string {
+  // NB: the id must not be `totoro`. HTML named access puts every element id
+  // onto `window`, so an SVG with id="totoro" shadows the preload's
+  // `window.totoro` bridge with a DOM node.
   return `
 <svg
-  id="totoro"
+  id="totoro-character"
   width="280"
   height="340"
   viewBox="0 0 280 340"
